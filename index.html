@@ -32,9 +32,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .header-controls{display:flex;gap:8px;align-items:center}
 .hdr-btn{background:var(--card-bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 10px;font-size:13px;cursor:pointer}
 .hdr-btn.active{background:var(--blue);border-color:var(--blue)}
-.player-stepper{display:flex;align-items:center;gap:6px}
-.player-stepper button{width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--card-bg);color:var(--text);font-size:16px;cursor:pointer}
-.player-stepper span{font-size:15px;font-weight:600;min-width:18px;text-align:center}
+.player-stepper{display:flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.player-stepper button{width:38px;height:38px;border:none;background:var(--card-bg);color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.player-stepper button:active{background:var(--blue)}
+.player-stepper span{font-size:14px;font-weight:700;min-width:32px;text-align:center;background:var(--bg);height:38px;line-height:38px}
 
 /* === Poker Table === */
 .table-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:8px 10px;min-height:320px;position:relative}
@@ -135,11 +136,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div class="header">
   <h1>德州助手</h1>
   <div class="header-controls">
-    <div class="player-stepper">
-      <button onclick="changeSeats(-1)">-</button>
-      <span id="seatCount">6</span>
-      <button onclick="changeSeats(1)">+</button>
-    </div>
     <button class="hdr-btn btn-reset" onclick="resetAll()">新局</button>
   </div>
 </div>
@@ -173,6 +169,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <button class="bet-btn custom" onclick="openCustomBet()">...</button>
   </div>
   <div class="action-row">
+    <div class="player-stepper">
+      <button onclick="changeSeats(-1)">−</button>
+      <span id="seatCount">6</span>
+      <button onclick="changeSeats(1)">+</button>
+    </div>
     <button class="btn-street" onclick="nextStreet()">下一街 ▶</button>
     <button class="btn-reset" onclick="clearBets()">清注</button>
   </div>
