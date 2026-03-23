@@ -114,16 +114,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .picker-card.used{opacity:.2;pointer-events:none}
 .picker-card:active{transform:scale(.9)}
 
-/* Custom bet input overlay */
-.custom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;display:none;align-items:center;justify-content:center}
-.custom-overlay.open{display:flex}
-.custom-box{background:var(--card-bg);border-radius:16px;padding:20px;width:260px;text-align:center}
-.custom-box h3{font-size:15px;margin-bottom:12px}
-.custom-box input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:20px;text-align:center}
-.custom-box .cbox-btns{display:flex;gap:8px;margin-top:12px}
-.custom-box .cbox-btns button{flex:1;padding:10px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer}
-.cb-ok{background:var(--blue);color:#fff}
-.cb-cancel{background:var(--border);color:var(--text)}
+/* Bet popup overlay */
+.bet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;display:none;align-items:flex-end;justify-content:center}
+.bet-overlay.open{display:flex}
+.bet-popup{background:var(--card-bg);border-top-left-radius:20px;border-top-right-radius:20px;width:100%;max-width:500px;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+.bet-popup-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.bet-popup-header h3{font-size:15px}
+.bet-popup-current{text-align:center;font-size:24px;font-weight:800;color:var(--yellow);padding:8px 0}
+.bet-popup-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.bet-popup-grid button{padding:14px 8px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-weight:600;cursor:pointer}
+.bet-popup-grid button:active{background:var(--blue);border-color:var(--blue)}
+.bet-popup-input{display:flex;gap:8px;margin-bottom:10px}
+.bet-popup-input input{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:18px;text-align:center}
+.bet-popup-input button{padding:12px 20px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.bet-popup-actions{display:flex;gap:8px}
+.bet-popup-actions button{flex:1;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer}
+.bpa-clear{background:var(--red);color:#fff}
+.bpa-close{background:var(--border);color:var(--text)}
 </style>
 </head>
 <body>
@@ -163,15 +170,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 <!-- Bottom Controls -->
 <div class="bottom-bar">
-  <div class="selected-info" id="selectedInfo">点击座位选中，然后输入下注金额</div>
-  <div class="bet-row" id="betRow">
-    <button class="bet-btn" onclick="addBet(5)">+5</button>
-    <button class="bet-btn" onclick="addBet(10)">+10</button>
-    <button class="bet-btn" onclick="addBet(25)">+25</button>
-    <button class="bet-btn" onclick="addBet(50)">+50</button>
-    <button class="bet-btn" onclick="addBet(100)">+100</button>
-    <button class="bet-btn custom" onclick="openCustomBet()">...</button>
-  </div>
+  <div class="selected-info">点击对手座位输入下注 | 点击"我"选手牌</div>
   <div class="action-row">
     <div class="player-stepper">
       <button onclick="changeSeats(-1)">−</button>
@@ -194,14 +193,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
 </div>
 
-<!-- Custom Bet Input -->
-<div class="custom-overlay" id="customOverlay" onclick="closeCustomBet(event)">
-  <div class="custom-box" onclick="event.stopPropagation()">
-    <h3>输入下注金额</h3>
-    <input type="number" id="customBetInput" inputmode="decimal" placeholder="0">
-    <div class="cbox-btns">
-      <button class="cb-cancel" onclick="closeCustomBet()">取消</button>
-      <button class="cb-ok" onclick="confirmCustomBet()">确定</button>
+<!-- Bet Popup -->
+<div class="bet-overlay" id="betOverlay" onclick="closeBetPopup(event)">
+  <div class="bet-popup" onclick="event.stopPropagation()">
+    <div class="bet-popup-header">
+      <h3 id="betPopupTitle">P1 下注</h3>
+      <button class="picker-close" onclick="closeBetPopup()">&times;</button>
+    </div>
+    <div class="bet-popup-current" id="betPopupCurrent">当前: 0</div>
+    <div class="bet-popup-grid">
+      <button onclick="setBet(5)">5</button>
+      <button onclick="setBet(10)">10</button>
+      <button onclick="setBet(15)">15</button>
+      <button onclick="setBet(25)">25</button>
+      <button onclick="setBet(50)">50</button>
+      <button onclick="setBet(100)">100</button>
+      <button onclick="setBet(200)">200</button>
+      <button onclick="setBet(500)">500</button>
+      <button onclick="addToBet()">+自定义</button>
+    </div>
+    <div class="bet-popup-input" id="betCustomRow" style="display:none">
+      <input type="number" id="betCustomInput" inputmode="decimal" placeholder="输入金额">
+      <button onclick="confirmCustomBet()">确定</button>
+    </div>
+    <div class="bet-popup-actions">
+      <button class="bpa-clear" onclick="clearSeatBet()">清零</button>
+      <button class="bpa-close" onclick="closeBetPopup()">完成</button>
     </div>
   </div>
 </div>
@@ -359,19 +376,12 @@ function cancelDealerTimer(){
 // ===== Seat Interaction =====
 function selectSeat(i){
   if(i===0){
-    // "我" - open card picker for hole cards
     if(state.holeCards.length<2) openPicker('hole');
     return;
   }
-  state.selectedSeat=state.selectedSeat===i?-1:i;
-  render();
-  if(state.selectedSeat>=0){
-    const s=state.seats[state.selectedSeat];
-    const styleName=STYLE_NAMES[s.style]||'未知';
-    document.getElementById('selectedInfo').textContent=`P${state.selectedSeat} [${styleName}] 当前下注: ${s.currentBet}`;
-  } else {
-    document.getElementById('selectedInfo').textContent='点击座位选中，然后输入下注金额';
-  }
+  // Open bet popup for this seat
+  state.selectedSeat=i;
+  openBetPopup(i);
 }
 
 function cycleStyle(i){
@@ -382,37 +392,53 @@ function cycleStyle(i){
   autoAnalyze();
 }
 
-function addBet(amount){
-  if(state.selectedSeat<0){
-    document.getElementById('selectedInfo').textContent='⚠ 请先点击一个座位';
-    return;
-  }
-  state.seats[state.selectedSeat].currentBet+=amount;
+// ===== Bet Popup =====
+function openBetPopup(i){
+  state.selectedSeat=i;
+  const s=state.seats[i];
+  document.getElementById('betPopupTitle').textContent=(i===0?'我':'P'+i)+' 下注';
+  document.getElementById('betPopupCurrent').textContent='当前: '+s.currentBet;
+  document.getElementById('betCustomRow').style.display='none';
+  document.getElementById('betOverlay').classList.add('open');
+}
+
+function closeBetPopup(e){
+  if(e&&e.target!==document.getElementById('betOverlay'))return;
+  document.getElementById('betOverlay').classList.remove('open');
+  state.selectedSeat=-1;
+}
+
+function setBet(amount){
+  if(state.selectedSeat<0)return;
+  state.seats[state.selectedSeat].currentBet=amount;
+  document.getElementById('betPopupCurrent').textContent='当前: '+amount;
   render();
   autoAnalyze();
 }
 
-function openCustomBet(){
-  if(state.selectedSeat<0){
-    document.getElementById('selectedInfo').textContent='⚠ 请先点击一个座位';
-    return;
-  }
-  document.getElementById('customBetInput').value='';
-  document.getElementById('customOverlay').classList.add('open');
-  setTimeout(()=>document.getElementById('customBetInput').focus(),100);
+function addToBet(){
+  document.getElementById('betCustomRow').style.display='flex';
+  document.getElementById('betCustomInput').value='';
+  setTimeout(()=>document.getElementById('betCustomInput').focus(),100);
 }
-function closeCustomBet(e){
-  if(e&&e.target!==document.getElementById('customOverlay'))return;
-  document.getElementById('customOverlay').classList.remove('open');
-}
+
 function confirmCustomBet(){
-  const v=parseFloat(document.getElementById('customBetInput').value)||0;
+  const v=parseFloat(document.getElementById('betCustomInput').value)||0;
   if(v>0&&state.selectedSeat>=0){
-    state.seats[state.selectedSeat].currentBet+=v;
+    state.seats[state.selectedSeat].currentBet=v;
+    document.getElementById('betPopupCurrent').textContent='当前: '+v;
+    document.getElementById('betCustomRow').style.display='none';
     render();
     autoAnalyze();
   }
-  document.getElementById('customOverlay').classList.remove('open');
+}
+
+function clearSeatBet(){
+  if(state.selectedSeat<0)return;
+  state.seats[state.selectedSeat].currentBet=0;
+  document.getElementById('betPopupCurrent').textContent='当前: 0';
+  render();
+  autoAnalyze();
 }
 
 function clearBets(){
