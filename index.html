@@ -49,6 +49,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .seat.folded{opacity:.35}
 .seat.folded .seat-avatar{background:#333;border-color:#555}
 .seat-bet{font-size:11px;color:var(--yellow);font-weight:600;margin-top:2px;min-height:14px}
+.seat-range{font-size:8px;color:var(--blue);margin-top:1px;max-width:60px;text-align:center;line-height:1.2;word-break:break-all}
 .seat-role{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
 .role-d{background:#f0c040;color:#000}
 .role-sb{background:#58a6ff;color:#fff}
@@ -309,6 +310,93 @@ if(worker){
   };
 }
 
+// ===== Range Estimation =====
+function estimateRange(seatIdx){
+  const s=state.seats[seatIdx];
+  if(!s||s.folded||s.currentBet===0) return '';
+
+  const n=state.numSeats;
+  const di=state.dealerIndex;
+  const dist=(seatIdx-di+n)%n;
+  const isPreflop=state.streetIndex===0;
+  const totalPot=state.pot+state.seats.reduce((acc,seat)=>acc+seat.currentBet,0);
+  const bet=s.currentBet;
+  const style=s.style;
+
+  // Position of this opponent
+  let posName='中位';
+  if(dist===0) posName='庄位';
+  else if(dist===1) posName='小盲';
+  else if(dist===2) posName='大盲';
+  else if(dist<=Math.floor(n*0.4)) posName='早位';
+  else if(dist<=Math.floor(n*0.7)) posName='中位';
+  else posName='晚位';
+
+  // Bet sizing relative to pot tells us hand strength
+  const potRatio=totalPot>0?bet/totalPot:0;
+
+  if(isPreflop){
+    // Preflop range based on position + bet size + style
+    const hasRaise=state.seats.some((ss,j)=>j!==seatIdx&&j!==0&&ss.currentBet>0&&!ss.folded);
+
+    if(style==='🦈'){
+      // Shark: tight-aggressive
+      if(potRatio>0.5) return 'QQ+,AKs';
+      return 'TT+,AQs+,AKo';
+    }
+    if(style==='🪨'){
+      // Rock: extremely tight
+      if(potRatio>0.5) return 'KK+,AKs';
+      return 'QQ+,AKs,AKo';
+    }
+    if(style==='🔥'){
+      // Maniac: very wide
+      return '任意两张';
+    }
+    if(style==='🐟'){
+      // Fish: wide passive
+      return '宽范围';
+    }
+
+    // Unknown style: estimate by position and sizing
+    if(posName==='早位'){
+      if(potRatio>0.5) return 'JJ+,AKs';
+      return 'TT+,AQs+';
+    }
+    if(posName==='中位'){
+      if(potRatio>0.5) return 'TT+,AQs+';
+      return '88+,AJs+,KQs';
+    }
+    if(posName==='晚位'||posName==='庄位'){
+      if(potRatio>0.5) return '99+,ATs+,KQs';
+      return '中等范围';
+    }
+    if(posName==='小盲'||posName==='大盲'){
+      return '防守范围';
+    }
+    return '';
+  }
+
+  // Postflop range based on bet sizing
+  if(potRatio>1.0){
+    if(style==='🦈') return '强牌/坚果';
+    if(style==='🔥') return '强牌或诈唬';
+    return '极强或诈唬';
+  }
+  if(potRatio>0.6){
+    if(style==='🦈') return '超对+/强听牌';
+    if(style==='🔥') return '宽范围/半诈唬';
+    return '顶对+/强听牌';
+  }
+  if(potRatio>0.3){
+    if(style==='🦈') return '顶对+';
+    return '中等牌/听牌';
+  }
+  // Small bet
+  if(style==='🦈') return '试探/阻隔注';
+  return '弱牌/试探';
+}
+
 // ===== Rendering =====
 function render(){
   renderTable();
@@ -358,6 +446,11 @@ function renderTable(){
     else inner+=`<div class="seat-bet"></div>`;
     // Style (not for me)
     if(!isMe) inner+=`<div class="seat-style" onclick="event.stopPropagation();cycleStyle(${i})">${s.style==='?'?'':s.style}</div>`;
+    // Range estimate
+    if(!isMe&&!s.folded&&s.currentBet>0){
+      const rangeText=estimateRange(i);
+      if(rangeText) inner+=`<div class="seat-range">${rangeText}</div>`;
+    }
     // My cards
     if(isMe&&state.holeCards.length>0){
       inner+='<div class="seat-cards">';
@@ -728,6 +821,14 @@ function applyAdvice(equity,handRank){
     const desc=activeStyles.filter(s=>s!=='?').map(s=>`${s}${STYLE_NAMES[s]}`).join(' ');
     reasoning.push(`下注对手：${desc}`);
   }
+  // Add opponent range estimates to reasoning
+  const rangeInfos=[];
+  for(let ri=1;ri<state.numSeats;ri++){
+    if(state.seats[ri].folded||state.seats[ri].currentBet===0) continue;
+    const rng=estimateRange(ri);
+    if(rng) rangeInfos.push(`P${ri}可能范围：${rng}`);
+  }
+  if(rangeInfos.length>0) reasoning.push(...rangeInfos);
 
   // === PREFLOP LOGIC (GTO-based) ===
   if(isPreflop){
