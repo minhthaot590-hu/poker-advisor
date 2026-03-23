@@ -47,6 +47,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .seat.selected .seat-avatar{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue)}
 .seat.is-me .seat-avatar{border-color:var(--green);background:#1a3a2a}
 .seat-bet{font-size:11px;color:var(--yellow);font-weight:600;margin-top:2px;min-height:14px}
+.seat-role{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
+.role-d{background:#f0c040;color:#000}
+.role-sb{background:#58a6ff;color:#fff}
+.role-bb{background:#f85149;color:#fff}
 .seat-style{font-size:12px;margin-top:1px;cursor:pointer;min-height:16px}
 .seat-cards{display:flex;gap:2px;margin-top:2px}
 .seat-cards .mini-card{width:22px;height:30px;border-radius:3px;background:#fff;border:1px solid #ccc;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1}
@@ -224,6 +228,7 @@ const state={
   communityCards:[],
   numSeats:6,
   myIndex:0, // "我" is seat index 0 (bottom)
+  dealerIndex:1, // 庄位 (D button)
   seats:[], // {currentBet, style}
   pot:0,
   streetIndex:0,
@@ -283,9 +288,18 @@ function renderTable(){
     const isMe=i===0;
     const s=state.seats[i];
 
+    // Determine role: D, SB, BB
+    const di=state.dealerIndex;
+    const sbIdx=(di+1)%n;
+    const bbIdx=(di+2)%n;
+
     let inner='';
-    // Avatar
-    inner+=`<div class="seat-avatar" onclick="selectSeat(${i})">${isMe?'我':'P'+(i)}</div>`;
+    // Avatar + role badge
+    inner+=`<div class="seat-avatar" onclick="selectSeat(${i})" ontouchstart="startDealerTimer(${i})" ontouchend="cancelDealerTimer()" onmousedown="startDealerTimer(${i})" onmouseup="cancelDealerTimer()">${isMe?'我':'P'+(i)}`;
+    if(i===di) inner+=`<span class="seat-role role-d">D</span>`;
+    else if(i===sbIdx) inner+=`<span class="seat-role role-sb">SB</span>`;
+    else if(i===bbIdx) inner+=`<span class="seat-role role-bb">BB</span>`;
+    inner+=`</div>`;
     // Bet
     if(s.currentBet>0) inner+=`<div class="seat-bet">${s.currentBet}</div>`;
     else inner+=`<div class="seat-bet"></div>`;
@@ -326,6 +340,20 @@ function renderPot(){
 
 function updateStreetLabel(){
   document.getElementById('streetLabel').textContent=STREET_NAMES[STREETS[state.streetIndex]]||'';
+}
+
+// ===== Dealer Long-press =====
+let dealerTimer=null;
+function startDealerTimer(i){
+  dealerTimer=setTimeout(()=>{
+    state.dealerIndex=i;
+    render();
+    autoAnalyze();
+    dealerTimer=null;
+  },600);
+}
+function cancelDealerTimer(){
+  if(dealerTimer){clearTimeout(dealerTimer);dealerTimer=null}
 }
 
 // ===== Seat Interaction =====
@@ -499,57 +527,82 @@ function autoAnalyze(){
   }
 }
 
+function getMyPosition(){
+  // Calculate position relative to dealer
+  const n=state.numSeats;
+  const di=state.dealerIndex;
+  const me=state.myIndex; // always 0
+  // Distance from dealer (clockwise)
+  const dist=(me-di+n)%n;
+  const sbDist=1, bbDist=2;
+  if(dist===0) return {name:'庄位(BTN)',factor:1.15};
+  if(dist===sbDist) return {name:'小盲(SB)',factor:0.9};
+  if(dist===bbDist) return {name:'大盲(BB)',factor:0.85};
+  // Early = seats right after BB; Late = seats before dealer
+  const posInOrder=(dist-3+n)%n; // 0-based from UTG
+  const totalNonBlind=n-3;
+  if(totalNonBlind<=0) return {name:'中位',factor:1.0};
+  const ratio=posInOrder/totalNonBlind;
+  if(ratio<0.4) return {name:'早位(EP)',factor:0.85};
+  if(ratio<0.7) return {name:'中位(MP)',factor:0.95};
+  return {name:'晚位(CO)',factor:1.1};
+}
+
 function applyAdvice(equity,handRank){
   const totalPot=state.pot+state.seats.reduce((s,seat)=>s+seat.currentBet,0);
-  // Find max opponent bet this street (= bet to call)
   const myBet=state.seats[0].currentBet;
   const maxOppBet=Math.max(...state.seats.slice(1).map(s=>s.currentBet),0);
   const betToCall=Math.max(maxOppBet-myBet,0);
   const potOdds=totalPot>0&&betToCall>0?betToCall/(totalPot+betToCall):0;
 
+  // Position factor from dealer position
+  const myPos=getMyPosition();
+
   // Opponent style adjustment
   let styleAdj=1;
   const activeStyles=state.seats.slice(1).filter(s=>s.currentBet>0).map(s=>s.style);
   if(activeStyles.length>0){
-    // Average style factor of betting opponents
     styleAdj=activeStyles.reduce((s,st)=>s+(STYLE_FACTOR[st]||1),0)/activeStyles.length;
   }
 
   // Adjusted threshold: if opponents are sharks/rocks, need more equity
-  const adjEquity=equity;
   const effectiveThreshold=potOdds*styleAdj;
+
+  // Apply position factor to equity
+  const adjEquityPos=equity*myPos.factor;
 
   let action,confidence,reasoning=[],suggestedRaise=null;
   reasoning.push(`牌型：${handRank}`);
   reasoning.push(`胜率：${(equity*100).toFixed(1)}%`);
+  reasoning.push(`位置：${myPos.name}`);
   if(potOdds>0)reasoning.push(`底池赔率：${(potOdds*100).toFixed(1)}%`);
   if(activeStyles.some(s=>s!=='?')){
     const desc=activeStyles.filter(s=>s!=='?').map(s=>`${s}${STYLE_NAMES[s]}`).join(' ');
     reasoning.push(`下注对手：${desc}`);
   }
 
-  if(adjEquity>0.75/styleAdj){
-    action='加注';confidence=Math.min(adjEquity,0.95);
+  if(adjEquityPos>0.75/styleAdj){
+    action='加注';confidence=Math.min(adjEquityPos,0.95);
     suggestedRaise=Math.max(totalPot*0.66,betToCall*2.5);
     reasoning.push('强牌，加注榨取价值。');
-  } else if(adjEquity>0.55/styleAdj){
-    if(potOdds>0&&adjEquity>effectiveThreshold){
-      action='跟注';confidence=adjEquity;
+  } else if(adjEquityPos>0.55/styleAdj){
+    if(potOdds>0&&adjEquityPos>effectiveThreshold){
+      action='跟注';confidence=adjEquityPos;
       reasoning.push('不错的牌，底池赔率有利。');
     } else {
-      action='加注';confidence=adjEquity*0.85;
+      action='加注';confidence=adjEquityPos*0.85;
       suggestedRaise=Math.max(totalPot*0.5,betToCall*2);
       reasoning.push('中等牌力，可以考虑加注。');
     }
-  } else if(adjEquity>0.35/styleAdj){
+  } else if(adjEquityPos>0.35/styleAdj){
     if(betToCall===0){
       action='过牌';confidence=0.6;
       reasoning.push('边缘牌，过牌看更多牌。');
-    } else if(potOdds>0&&adjEquity>effectiveThreshold){
-      action='跟注';confidence=adjEquity;
+    } else if(potOdds>0&&adjEquityPos>effectiveThreshold){
+      action='跟注';confidence=adjEquityPos;
       reasoning.push('底池赔率支持跟注。');
     } else {
-      action='弃牌';confidence=1-adjEquity;
+      action='弃牌';confidence=1-adjEquityPos;
       if(styleAdj>1.1)reasoning.push('对手偏紧/凶，其下注大概率有强牌。');
       reasoning.push('边缘牌且赔率不好，建议弃牌。');
     }
@@ -558,13 +611,13 @@ function applyAdvice(equity,handRank){
       action='过牌';confidence=0.7;
       reasoning.push('弱牌，免费看牌。');
     } else {
-      action='弃牌';confidence=1-adjEquity;
+      action='弃牌';confidence=1-adjEquityPos;
       if(styleAdj>1.1)reasoning.push('对手偏紧/凶，其下注大概率有强牌。');
       reasoning.push('弱牌面对下注，果断弃牌。');
     }
   }
 
-  state.lastAdvice={action,confidence,equity:adjEquity,handRank,potOdds,reasoning,suggestedRaise,betToCall};
+  state.lastAdvice={action,confidence,equity:adjEquityPos,handRank,potOdds,reasoning,suggestedRaise,betToCall};
   showBanner();
 }
 
