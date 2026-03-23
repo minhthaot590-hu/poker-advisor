@@ -697,6 +697,9 @@ function applyAdvice(equity,handRank){
   // Apply position factor to equity
   const adjEquityPos=equity*myPos.factor;
 
+  const isPreflop=state.streetIndex===0;
+  const anyOppBet=maxOppBet>0;
+
   let action,confidence,reasoning=[],suggestedRaise=null;
   reasoning.push(`牌型：${handRank}`);
   reasoning.push(`胜率：${(equity*100).toFixed(1)}%`);
@@ -707,39 +710,90 @@ function applyAdvice(equity,handRank){
     reasoning.push(`下注对手：${desc}`);
   }
 
-  if(adjEquityPos>0.75/styleAdj){
-    action='加注';confidence=Math.min(adjEquityPos,0.95);
-    suggestedRaise=Math.max(totalPot*0.66,betToCall*2.5);
-    reasoning.push('强牌，加注榨取价值。');
-  } else if(adjEquityPos>0.55/styleAdj){
-    if(potOdds>0&&adjEquityPos>effectiveThreshold){
-      action='跟注';confidence=adjEquityPos;
-      reasoning.push('不错的牌，底池赔率有利。');
+  // === PREFLOP LOGIC ===
+  if(isPreflop){
+    if(!anyOppBet){
+      // No one has raised yet → Open raise or fold
+      if(adjEquityPos>0.45){
+        action='加注';confidence=Math.min(adjEquityPos,0.95);
+        suggestedRaise=Math.max(totalPot*3,6); // Standard open: 2.5-3BB
+        if(adjEquityPos>0.6) reasoning.push('优质起手牌，标准open raise。');
+        else reasoning.push('可玩起手牌，在'+myPos.name+'open raise。');
+      } else if(adjEquityPos>0.35&&myPos.factor>=1.0){
+        action='加注';confidence=adjEquityPos*0.8;
+        suggestedRaise=Math.max(totalPot*2.5,5);
+        reasoning.push('边缘牌但位置好，可以尝试偷盲。');
+      } else if(adjEquityPos>0.3){
+        action='弃牌';confidence=1-adjEquityPos;
+        reasoning.push('翻前牌力不足，弃牌等更好的机会。');
+      } else {
+        action='弃牌';confidence=1-adjEquityPos;
+        reasoning.push('弱牌，果断弃牌。');
+      }
     } else {
-      action='加注';confidence=adjEquityPos*0.85;
-      suggestedRaise=Math.max(totalPot*0.5,betToCall*2);
-      reasoning.push('中等牌力，可以考虑加注。');
+      // Someone has raised → 3-bet, call, or fold
+      if(adjEquityPos>0.65/styleAdj){
+        action='加注';confidence=Math.min(adjEquityPos,0.95);
+        suggestedRaise=Math.max(betToCall*3,maxOppBet*3);
+        reasoning.push('强牌面对加注，3-bet争取主动权。');
+      } else if(adjEquityPos>0.5/styleAdj){
+        if(potOdds>0&&adjEquityPos>effectiveThreshold){
+          action='跟注';confidence=adjEquityPos;
+          reasoning.push('不错的牌，跟注看翻牌。');
+        } else {
+          action='跟注';confidence=adjEquityPos*0.9;
+          reasoning.push('有位置优势，跟注有隐含赔率。');
+        }
+      } else if(adjEquityPos>0.38/styleAdj&&myPos.factor>=1.05){
+        action='跟注';confidence=adjEquityPos*0.7;
+        reasoning.push('边缘牌但位置好，可以跟注碰牌。');
+      } else {
+        action='弃牌';confidence=1-adjEquityPos;
+        if(styleAdj>1.1)reasoning.push('对手偏紧/凶，其加注大概率有强牌。');
+        reasoning.push('面对加注牌力不足，弃牌。');
+      }
     }
-  } else if(adjEquityPos>0.35/styleAdj){
-    if(betToCall===0){
-      action='过牌';confidence=0.6;
-      reasoning.push('边缘牌，过牌看更多牌。');
-    } else if(potOdds>0&&adjEquityPos>effectiveThreshold){
-      action='跟注';confidence=adjEquityPos;
-      reasoning.push('底池赔率支持跟注。');
+  }
+  // === POSTFLOP LOGIC ===
+  else {
+    if(adjEquityPos>0.75/styleAdj){
+      action='加注';confidence=Math.min(adjEquityPos,0.95);
+      suggestedRaise=Math.max(totalPot*0.66,betToCall*2.5);
+      reasoning.push('强牌，加注榨取价值。');
+    } else if(adjEquityPos>0.55/styleAdj){
+      if(betToCall===0){
+        action='加注';confidence=adjEquityPos*0.85;
+        suggestedRaise=Math.max(totalPot*0.5,4);
+        reasoning.push('不错的牌，主动下注争夺底池。');
+      } else if(potOdds>0&&adjEquityPos>effectiveThreshold){
+        action='跟注';confidence=adjEquityPos;
+        reasoning.push('不错的牌，底池赔率有利。');
+      } else {
+        action='加注';confidence=adjEquityPos*0.8;
+        suggestedRaise=Math.max(totalPot*0.5,betToCall*2);
+        reasoning.push('中等牌力，可以考虑加注。');
+      }
+    } else if(adjEquityPos>0.35/styleAdj){
+      if(betToCall===0){
+        action='过牌';confidence=0.6;
+        reasoning.push('边缘牌，过牌看更多牌。');
+      } else if(potOdds>0&&adjEquityPos>effectiveThreshold){
+        action='跟注';confidence=adjEquityPos;
+        reasoning.push('底池赔率支持跟注。');
+      } else {
+        action='弃牌';confidence=1-adjEquityPos;
+        if(styleAdj>1.1)reasoning.push('对手偏紧/凶，其下注大概率有强牌。');
+        reasoning.push('边缘牌且赔率不好，建议弃牌。');
+      }
     } else {
-      action='弃牌';confidence=1-adjEquityPos;
-      if(styleAdj>1.1)reasoning.push('对手偏紧/凶，其下注大概率有强牌。');
-      reasoning.push('边缘牌且赔率不好，建议弃牌。');
-    }
-  } else {
-    if(betToCall===0){
-      action='过牌';confidence=0.7;
-      reasoning.push('弱牌，免费看牌。');
-    } else {
-      action='弃牌';confidence=1-adjEquityPos;
-      if(styleAdj>1.1)reasoning.push('对手偏紧/凶，其下注大概率有强牌。');
-      reasoning.push('弱牌面对下注，果断弃牌。');
+      if(betToCall===0){
+        action='过牌';confidence=0.7;
+        reasoning.push('弱牌，免费看牌。');
+      } else {
+        action='弃牌';confidence=1-adjEquityPos;
+        if(styleAdj>1.1)reasoning.push('对手偏紧/凶，其下注大概率有强牌。');
+        reasoning.push('弱牌面对下注，果断弃牌。');
+      }
     }
   }
 
