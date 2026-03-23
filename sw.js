@@ -1,7 +1,8 @@
-const CACHE_NAME = 'poker-advisor-v1';
+const CACHE_NAME = 'poker-advisor-v2';
 const ASSETS = [
   './',
   './index.html',
+  './worker.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
