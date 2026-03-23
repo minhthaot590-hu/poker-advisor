@@ -93,6 +93,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .detail-reasons{font-size:12px;color:var(--text2)}
 .detail-reasons li{padding:2px 0;list-style:none;display:flex;align-items:flex-start;gap:6px}
 .detail-reasons li::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--text2);margin-top:5px;flex-shrink:0}
+/* AI analysis */
+.ai-section{margin-top:10px;padding:10px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);border-radius:10px}
+.ai-section h4{font-size:12px;color:var(--blue);margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.ai-section .ai-text{font-size:12px;color:var(--text);line-height:1.5;white-space:pre-wrap}
+.ai-loading{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.ai-dot{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+/* Settings overlay */
+.settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:95;display:none;align-items:center;justify-content:center}
+.settings-overlay.open{display:flex}
+.settings-box{background:var(--card-bg);border-radius:16px;padding:20px;width:320px;max-width:90vw}
+.settings-box h3{font-size:16px;margin-bottom:14px}
+.settings-row{margin-bottom:12px}
+.settings-row label{font-size:12px;color:var(--text2);display:block;margin-bottom:4px}
+.settings-row input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px}
+.settings-row .hint{font-size:10px;color:var(--text2);margin-top:4px}
+.settings-btns{display:flex;gap:8px}
+.settings-btns button{flex:1;padding:10px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer}
 
 /* === Card Picker === */
 .picker-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:flex-end;justify-content:center}
@@ -139,6 +157,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div class="header">
   <h1>德州助手</h1>
   <div class="header-controls">
+    <button class="hdr-btn" onclick="openSettings()">⚙</button>
     <button class="hdr-btn btn-reset" onclick="resetAll()">新局</button>
   </div>
 </div>
@@ -166,6 +185,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div id="detailPanel">
   <div class="detail-stats" id="detailStats"></div>
   <ul class="detail-reasons" id="detailReasons"></ul>
+  <div class="ai-section" id="aiSection" style="display:none">
+    <h4>🤖 AI 深度分析</h4>
+    <div id="aiContent"></div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="settings-overlay" id="settingsOverlay" onclick="closeSettings(event)">
+  <div class="settings-box" onclick="event.stopPropagation()">
+    <h3>⚙ 设置</h3>
+    <div class="settings-row">
+      <label>Anthropic API Key</label>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
+      <div class="hint">在 console.anthropic.com 获取。密钥仅存储在你的手机本地，不会上传。</div>
+    </div>
+    <div class="settings-btns">
+      <button style="background:var(--border);color:var(--text)" onclick="closeSettings()">取消</button>
+      <button style="background:var(--blue);color:#fff" onclick="saveSettings()">保存</button>
+    </div>
+  </div>
 </div>
 
 <!-- Bottom Controls -->
@@ -534,6 +573,7 @@ function removeCommunity(i){
 }
 
 // ===== Analysis =====
+let aiDebounce=null;
 function autoAnalyze(){
   if(state.holeCards.length<2)return;
   const opp=state.numSeats-1;
@@ -545,12 +585,14 @@ function autoAnalyze(){
       sims:5000
     });
   } else {
-    // Fallback: inline (blocking but works)
     const equity=monteCarloInline(state.holeCards,state.communityCards,opp,2000);
     const allC=[...state.holeCards,...state.communityCards];
     const hand=allC.length>=5?evalBestInline(allC):{rank:'高牌'};
     applyAdvice(equity,hand.rank);
   }
+  // Debounce AI call (wait 1s after last change)
+  if(aiDebounce) clearTimeout(aiDebounce);
+  aiDebounce=setTimeout(()=>aiAnalyze(),1000);
 }
 
 function getMyPosition(){
@@ -727,6 +769,104 @@ function monteCarloInline(hole,comm,opp,sims){
     if(w)wins+=tie?0.5:1;
   }
   return wins/sims;
+}
+
+// ===== Settings =====
+function openSettings(){
+  document.getElementById('apiKeyInput').value=localStorage.getItem('poker_api_key')||'';
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+function closeSettings(e){
+  if(e&&e.target!==document.getElementById('settingsOverlay'))return;
+  document.getElementById('settingsOverlay').classList.remove('open');
+}
+function saveSettings(){
+  const key=document.getElementById('apiKeyInput').value.trim();
+  if(key) localStorage.setItem('poker_api_key',key);
+  else localStorage.removeItem('poker_api_key');
+  document.getElementById('settingsOverlay').classList.remove('open');
+}
+
+// ===== AI Cloud Analysis =====
+let aiAbort=null;
+async function aiAnalyze(){
+  const apiKey=localStorage.getItem('poker_api_key');
+  if(!apiKey||state.holeCards.length<2) return;
+
+  const aiSection=document.getElementById('aiSection');
+  const aiContent=document.getElementById('aiContent');
+  aiSection.style.display='block';
+  aiContent.innerHTML='<div class="ai-loading"><div class="ai-dot"></div> AI 分析中...</div>';
+
+  if(aiAbort) aiAbort.abort();
+  aiAbort=new AbortController();
+
+  const n=state.numSeats;
+  const di=state.dealerIndex;
+  const myPos=getMyPosition();
+  const totalPot=state.pot+state.seats.reduce((s,seat)=>s+seat.currentBet,0);
+  const myBet=state.seats[0].currentBet;
+  const maxOppBet=Math.max(...state.seats.slice(1).map(s=>s.currentBet),0);
+  const betToCall=Math.max(maxOppBet-myBet,0);
+
+  const holeStr=state.holeCards.map(c=>c.rank+c.symbol).join(' ');
+  const commStr=state.communityCards.length>0?state.communityCards.map(c=>c.rank+c.symbol).join(' '):'无';
+  const streetName=STREET_NAMES[STREETS[state.streetIndex]];
+
+  let opponentInfo='';
+  for(let i=1;i<n;i++){
+    const s=state.seats[i];
+    const role=i===di?'庄位':i===(di+1)%n?'小盲':i===(di+2)%n?'大盲':'';
+    const style=s.style!=='?'?STYLE_NAMES[s.style]:'未知风格';
+    if(s.currentBet>0||s.style!=='?'){
+      opponentInfo+=`P${i}${role?' ('+role+')':''}：下注${s.currentBet}，${style}\n`;
+    }
+  }
+
+  const prompt=`你是一个专业德州扑克GTO教练。根据以下牌局信息给出简短的策略建议（3-5句话），包括：行动建议、理由、对手范围分析、关键考量。用中文回答。
+
+牌局信息：
+- 我的手牌：${holeStr}
+- 公共牌：${commStr}
+- 当前街：${streetName}
+- 我的位置：${myPos.name}
+- 玩家人数：${n}人
+- 底池：${totalPot}
+- 需跟注：${betToCall}
+${opponentInfo?'- 对手信息：\n'+opponentInfo:''}
+
+请给出GTO视角的简短建议：`;
+
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:300,
+        messages:[{role:'user',content:prompt}]
+      }),
+      signal:aiAbort.signal
+    });
+
+    if(!resp.ok){
+      const err=await resp.text();
+      aiContent.innerHTML=`<div class="ai-text" style="color:var(--red)">API错误：${resp.status}。请检查设置中的API Key。</div>`;
+      return;
+    }
+
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'无响应';
+    aiContent.innerHTML=`<div class="ai-text">${text}</div>`;
+  }catch(e){
+    if(e.name==='AbortError') return;
+    aiContent.innerHTML=`<div class="ai-text" style="color:var(--red)">网络错误：${e.message}</div>`;
+  }
 }
 
 // ===== Init =====
