@@ -351,7 +351,7 @@ function renderTable(){
 
     let inner='';
     // Avatar + role badge
-    inner+=`<div class="seat-avatar" onclick="selectSeat(${i})" ontouchstart="startDealerTimer(${i})" ontouchend="cancelDealerTimer()" onmousedown="startDealerTimer(${i})" onmouseup="cancelDealerTimer()">${isMe?'我':'P'+(i)}`;
+    inner+=`<div class="seat-avatar" onclick="selectSeat(${i})" ontouchstart="startDealerTimer(${i},event)" ontouchend="cancelDealerTimer()" onmousedown="startDealerTimer(${i},event)" onmouseup="cancelDealerTimer()">${isMe?'我':'P'+(i)}`;
     if(i===di) inner+=`<span class="seat-role role-d">D</span>`;
     else if(i===sbIdx) inner+=`<span class="seat-role role-sb">SB</span>`;
     else if(i===bbIdx) inner+=`<span class="seat-role role-bb">BB</span>`;
@@ -415,10 +415,12 @@ function cancelDealerTimer(){
 // ===== Seat Interaction =====
 function selectSeat(i){
   if(i===0){
-    if(state.holeCards.length<2) openPicker('hole');
-    return;
+    if(state.holeCards.length<2){
+      openPicker('hole');
+      return;
+    }
+    // 手牌已选，弹出下注面板
   }
-  // Open bet popup for this seat
   state.selectedSeat=i;
   openBetPopup(i);
 }
