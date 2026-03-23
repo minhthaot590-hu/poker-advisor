@@ -550,7 +550,14 @@ function openPicker(target){
   if(target==='hole'&&state.holeCards.length>=2)return;
   if(target==='community'&&state.communityCards.length>=5)return;
   pickerTarget=target;
-  document.getElementById('pickerTitle').textContent=target==='hole'?'选择手牌':'选择公共牌';
+  if(target==='hole'){
+    document.getElementById('pickerTitle').textContent='选择手牌';
+  } else {
+    const n=state.communityCards.length;
+    if(n<3) document.getElementById('pickerTitle').textContent=`选择翻牌 (${n}/3)`;
+    else if(n===3) document.getElementById('pickerTitle').textContent='选择转牌';
+    else document.getElementById('pickerTitle').textContent='选择河牌';
+  }
   const used=usedIds();
   let html='';
   for(const suit of SUITS){
@@ -574,14 +581,47 @@ function pickCard(rank,suitName,symbol,color){
   const card={rank,suit:suitName,symbol,color,id:rank+suitName,value:RV[rank]};
   if(pickerTarget==='hole'&&state.holeCards.length<2){
     state.holeCards.push(card);
+    // Mark card as used in picker
+    refreshPickerUsed();
     render();
     if(state.holeCards.length>=2){closePicker();autoAnalyze()}
   } else if(pickerTarget==='community'&&state.communityCards.length<5){
     state.communityCards.push(card);
+    refreshPickerUsed();
     render();
-    closePicker();
-    autoAnalyze();
+    const n=state.communityCards.length;
+    // Flop: stay open until 3 cards; Turn/River: close after 1
+    if(n>=5){closePicker();autoAnalyze()}
+    else if(n===3&&state.streetIndex===0){
+      // Just finished flop, close and auto advance street
+      closePicker();
+      state.streetIndex=1;
+      updateStreetLabel();
+      autoAnalyze();
+    } else if(n===4){
+      closePicker();
+      state.streetIndex=2;
+      updateStreetLabel();
+      autoAnalyze();
+    } else if(n<3){
+      // Still selecting flop, keep picker open
+      document.getElementById('pickerTitle').textContent=`选择公共牌 (${n}/3)`;
+    }
   }
+}
+
+function refreshPickerUsed(){
+  const used=usedIds();
+  document.querySelectorAll('.picker-card').forEach(el=>{
+    const r=el.querySelector('.p-rank')?.textContent;
+    const s=el.querySelector('.p-suit')?.textContent;
+    if(!r||!s)return;
+    const suitMap={'♥':'hearts','♦':'diamonds','♣':'clubs','♠':'spades'};
+    const id=r+suitMap[s];
+    if(used.has(id)){
+      el.classList.add('used');
+    }
+  });
 }
 
 function removeCommunity(i){
