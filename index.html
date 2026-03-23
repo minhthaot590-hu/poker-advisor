@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0d1117">
+<title>德州助手</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --card-bg: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --red: #f85149;
+  --green: #3fb950;
+  --blue: #58a6ff;
+  --yellow: #d29922;
+  --purple: #bc8cff;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+h2 { font-size: 14px; color: var(--text2); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+
+/* Sections */
+.section {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+/* Card slots */
+.card-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.card-slot {
+  width: 56px; height: 78px;
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: var(--text2);
+  cursor: pointer; transition: all .15s;
+}
+.card-slot:active { transform: scale(0.95); }
+.card-slot.filled {
+  border: 2px solid var(--border);
+  background: #fff;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+.card-slot.filled .rank { font-size: 18px; font-weight: 700; line-height: 1; }
+.card-slot.filled .suit { font-size: 14px; line-height: 1; }
+.card-slot.filled.red { color: #e53e3e; }
+.card-slot.filled.black { color: #1a202c; }
+.card-slot.filled .remove-btn {
+  position: absolute; top: -6px; right: -6px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--red); color: #fff;
+  font-size: 11px; display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--bg);
+}
+.card-slot.small { width: 48px; height: 66px; }
+.card-slot.small .rank { font-size: 15px; }
+.card-slot.small .suit { font-size: 12px; }
+
+/* Card Picker Modal */
+.picker-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  z-index: 100; display: none; align-items: flex-end; justify-content: center;
+}
+.picker-overlay.open { display: flex; }
+.picker-sheet {
+  background: var(--card-bg);
+  border-top-left-radius: 20px; border-top-right-radius: 20px;
+  width: 100%; max-width: 500px; max-height: 70dvh;
+  overflow-y: auto; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+.picker-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.picker-header h3 { font-size: 16px; }
+.picker-close {
+  background: var(--border); border: none; color: var(--text);
+  width: 30px; height: 30px; border-radius: 50%; font-size: 16px; cursor: pointer;
+}
+.suit-section { margin-bottom: 12px; }
+.suit-label { font-size: 13px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
+.suit-label.red { color: #e53e3e; }
+.suit-label.black { color: var(--text); }
+.picker-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.picker-card {
+  aspect-ratio: 0.72; border-radius: 6px;
+  background: #fff; border: 1px solid #ddd;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: all .1s; font-weight: 600;
+}
+.picker-card .p-rank { font-size: 14px; line-height: 1; }
+.picker-card .p-suit { font-size: 11px; line-height: 1; }
+.picker-card.red { color: #e53e3e; }
+.picker-card.black { color: #1a202c; }
+.picker-card.used { opacity: 0.2; pointer-events: none; }
+.picker-card:active { transform: scale(0.9); }
+
+/* Input fields */
+.input-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.input-row:last-child { border-bottom: none; }
+.input-row label { font-size: 14px; }
+.input-row input[type=number] {
+  width: 90px; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font-size: 16px; text-align: right;
+}
+.input-row select {
+  padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font-size: 14px;
+}
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--card-bg);
+  color: var(--text); font-size: 18px; cursor: pointer;
+}
+.stepper button:disabled { opacity: 0.3; }
+.stepper span { font-size: 18px; min-width: 24px; text-align: center; font-weight: 600; }
+
+/* Position selector */
+.pos-row { display: flex; gap: 6px; margin-top: 4px; }
+.pos-btn {
+  flex: 1; padding: 8px 4px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text2); font-size: 12px; cursor: pointer; text-align: center;
+  transition: all .15s;
+}
+.pos-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+/* Analyze button */
+.analyze-btn {
+  width: 100%; padding: 14px; border-radius: 12px;
+  border: none; font-size: 17px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+  background: var(--blue); color: #fff;
+  margin-bottom: 12px;
+}
+.analyze-btn:disabled { background: var(--border); color: var(--text2); }
+.analyze-btn:active:not(:disabled) { transform: scale(0.98); }
+
+/* Results */
+.result-card {
+  border-radius: 16px; padding: 20px;
+  text-align: center; display: none;
+}
+.result-card.show { display: block; }
+.result-action { font-size: 32px; font-weight: 900; margin-bottom: 4px; }
+.result-confidence { font-size: 13px; opacity: 0.8; margin-bottom: 12px; }
+.result-stats { display: flex; gap: 12px; justify-content: center; margin-bottom: 14px; }
+.stat-box {
+  background: rgba(255,255,255,.15); border-radius: 10px; padding: 10px 14px; min-width: 80px;
+}
+.stat-box .stat-label { font-size: 11px; opacity: 0.7; }
+.stat-box .stat-value { font-size: 20px; font-weight: 700; }
+.result-raise { font-size: 14px; margin-bottom: 10px; opacity: 0.9; }
+.result-reasoning {
+  text-align: left; background: rgba(0,0,0,.2); border-radius: 10px; padding: 12px;
+}
+.result-reasoning h4 { font-size: 13px; margin-bottom: 8px; opacity: 0.8; }
+.result-reasoning ul { list-style: none; }
+.result-reasoning li {
+  font-size: 13px; padding: 3px 0; opacity: 0.85;
+  display: flex; align-items: flex-start; gap: 6px;
+}
+.result-reasoning li::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.5); margin-top: 5px; flex-shrink: 0; }
+
+.reset-btn {
+  width: 100%; padding: 12px; border-radius: 12px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text2); font-size: 14px; cursor: pointer;
+  margin-bottom: 20px;
+}
+
+/* Action colors */
+.result-fold { background: linear-gradient(135deg, #e53e3e, #c53030); color: #fff; }
+.result-check { background: linear-gradient(135deg, #d69e2e, #b7791f); color: #fff; }
+.result-call { background: linear-gradient(135deg, #38a169, #2f855a); color: #fff; }
+.result-raise { background: linear-gradient(135deg, #3182ce, #2b6cb0); color: #fff; }
+.result-allin { background: linear-gradient(135deg, #805ad5, #6b46c1); color: #fff; }
+
+.loading { text-align: center; padding: 20px; color: var(--text2); display: none; }
+.loading.show { display: block; }
+.spinner {
+  width: 24px; height: 24px; border: 3px solid var(--border);
+  border-top-color: var(--blue); border-radius: 50%;
+  animation: spin .6s linear infinite; margin: 0 auto 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Hole Cards -->
+<div class="section">
+  <h2>你的手牌</h2>
+  <div class="card-row" id="holeCards">
+    <div class="card-slot" onclick="openPicker('hole')">+</div>
+    <div class="card-slot" onclick="openPicker('hole')">+</div>
+  </div>
+</div>
+
+<!-- Community Cards -->
+<div class="section">
+  <h2>公共牌</h2>
+  <div class="card-row" id="communityCards">
+    <div class="card-slot small" onclick="openPicker('community')">+</div>
+    <div class="card-slot small" onclick="openPicker('community')">+</div>
+    <div class="card-slot small" onclick="openPicker('community')">+</div>
+    <div class="card-slot small" onclick="openPicker('community')">+</div>
+    <div class="card-slot small" onclick="openPicker('community')">+</div>
+  </div>
+</div>
+
+<!-- Game Info -->
+<div class="section">
+  <div class="input-row">
+    <label>玩家人数</label>
+    <div class="stepper">
+      <button onclick="changePlayers(-1)">-</button>
+      <span id="playerCount">2</span>
+      <button onclick="changePlayers(1)">+</button>
+    </div>
+  </div>
+  <div class="input-row">
+    <label>底池大小</label>
+    <input type="number" id="potSize" value="0" min="0" step="1" inputmode="decimal">
+  </div>
+  <div class="input-row">
+    <label>需跟注</label>
+    <input type="number" id="betToCall" value="0" min="0" step="1" inputmode="decimal">
+  </div>
+  <div style="padding-top:10px">
+    <h2>位置</h2>
+    <div class="pos-row">
+      <div class="pos-btn" onclick="setPosition('early',this)">早位</div>
+      <div class="pos-btn" onclick="setPosition('middle',this)">中位</div>
+      <div class="pos-btn active" onclick="setPosition('late',this)">晚位</div>
+      <div class="pos-btn" onclick="setPosition('blinds',this)">盲注</div>
+    </div>
+  </div>
+</div>
+
+<!-- Analyze Button -->
+<button class="analyze-btn" id="analyzeBtn" onclick="analyze()" disabled>开始分析</button>
+
+<!-- Loading -->
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  分析中...
+</div>
+
+<!-- Results -->
+<div class="result-card" id="resultCard">
+  <div class="result-action" id="resultAction"></div>
+  <div class="result-confidence" id="resultConfidence"></div>
+  <div class="result-stats" id="resultStats"></div>
+  <div class="result-raise" id="resultRaise" style="display:none"></div>
+  <div class="result-reasoning">
+    <h4>分析详情</h4>
+    <ul id="resultReasons"></ul>
+  </div>
+</div>
+
+<!-- Reset -->
+<button class="reset-btn" onclick="resetAll()">重置</button>
+
+<!-- Card Picker -->
+<div class="picker-overlay" id="pickerOverlay" onclick="closePicker(event)">
+  <div class="picker-sheet" onclick="event.stopPropagation()">
+    <div class="picker-header">
+      <h3>选择一张牌</h3>
+      <button class="picker-close" onclick="closePicker()">&times;</button>
+    </div>
+    <div id="pickerContent"></div>
+  </div>
+</div>
+
+<script>
+// ===== State =====
+const state = {
+  holeCards: [],
+  communityCards: [],
+  players: 2,
+  position: 'late',
+  potSize: 0,
+  betToCall: 0
+};
+
+const SUITS = [
+  { name: 'hearts', symbol: '\u2665', color: 'red', label: '红心' },
+  { name: 'diamonds', symbol: '\u2666', color: 'red', label: '方块' },
+  { name: 'clubs', symbol: '\u2663', color: 'black', label: '梅花' },
+  { name: 'spades', symbol: '\u2660', color: 'black', label: '黑桃' }
+];
+const RANKS = ['A','K','Q','J','10','9','8','7','6','5','4','3','2'];
+const RANK_VALUES = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14 };
+
+let pickerTarget = 'hole';
+
+function usedCardIds() {
+  return new Set([...state.holeCards, ...state.communityCards].map(c => c.id));
+}
+
+function cardId(rank, suit) { return rank + suit; }
+
+// ===== UI =====
+function renderHoleCards() {
+  const el = document.getElementById('holeCards');
+  let html = '';
+  for (let i = 0; i < 2; i++) {
+    if (i < state.holeCards.length) {
+      const c = state.holeCards[i];
+      html += `<div class="card-slot filled ${c.color}" onclick="removeHoleCard(${i})">
+        <div class="remove-btn">&times;</div>
+        <span class="rank">${c.rank}</span><span class="suit">${c.symbol}</span>
+      </div>`;
+    } else {
+      html += `<div class="card-slot" onclick="openPicker('hole')">+</div>`;
+    }
+  }
+  el.innerHTML = html;
+  updateAnalyzeBtn();
+}
+
+function renderCommunityCards() {
+  const el = document.getElementById('communityCards');
+  let html = '';
+  for (let i = 0; i < 5; i++) {
+    if (i < state.communityCards.length) {
+      const c = state.communityCards[i];
+      html += `<div class="card-slot small filled ${c.color}" onclick="removeCommunityCard(${i})">
+        <div class="remove-btn">&times;</div>
+        <span class="rank">${c.rank}</span><span class="suit">${c.symbol}</span>
+      </div>`;
+    } else {
+      html += `<div class="card-slot small" onclick="openPicker('community')">+</div>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+function updateAnalyzeBtn() {
+  document.getElementById('analyzeBtn').disabled = state.holeCards.length < 2;
+}
+
+function openPicker(target) {
+  if (target === 'hole' && state.holeCards.length >= 2) return;
+  if (target === 'community' && state.communityCards.length >= 5) return;
+  pickerTarget = target;
+  const used = usedCardIds();
+  let html = '';
+  for (const suit of SUITS) {
+    html += `<div class="suit-section">
+      <div class="suit-label ${suit.color}">${suit.symbol} ${suit.label}</div>
+      <div class="picker-grid">`;
+    for (const rank of RANKS) {
+      const id = cardId(rank, suit.name);
+      const isUsed = used.has(id);
+      html += `<div class="picker-card ${suit.color} ${isUsed ? 'used' : ''}"
+        onclick="pickCard('${rank}','${suit.name}','${suit.symbol}','${suit.color}')">
+        <span class="p-rank">${rank}</span><span class="p-suit">${suit.symbol}</span>
+      </div>`;
+    }
+    html += '</div></div>';
+  }
+  document.getElementById('pickerContent').innerHTML = html;
+  document.getElementById('pickerOverlay').classList.add('open');
+}
+
+function closePicker(e) {
+  if (e && e.target !== document.getElementById('pickerOverlay')) return;
+  document.getElementById('pickerOverlay').classList.remove('open');
+}
+
+function pickCard(rank, suitName, symbol, color) {
+  const card = { rank, suit: suitName, symbol, color, id: cardId(rank, suitName), value: RANK_VALUES[rank] };
+  if (pickerTarget === 'hole' && state.holeCards.length < 2) {
+    state.holeCards.push(card);
+    renderHoleCards();
+    if (state.holeCards.length >= 2) closePicker();
+  } else if (pickerTarget === 'community' && state.communityCards.length < 5) {
+    state.communityCards.push(card);
+    renderCommunityCards();
+    closePicker();
+  }
+}
+
+function removeHoleCard(i) {
+  state.holeCards.splice(i, 1);
+  renderHoleCards();
+  hideResult();
+}
+function removeCommunityCard(i) {
+  state.communityCards.splice(i, 1);
+  renderCommunityCards();
+}
+
+function changePlayers(d) {
+  state.players = Math.max(2, Math.min(10, state.players + d));
+  document.getElementById('playerCount').textContent = state.players;
+}
+
+function setPosition(pos, el) {
+  state.position = pos;
+  document.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function resetAll() {
+  state.holeCards = []; state.communityCards = [];
+  state.players = 2; state.position = 'late';
+  document.getElementById('potSize').value = 0;
+  document.getElementById('betToCall').value = 0;
+  document.getElementById('playerCount').textContent = 2;
+  document.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.pos-btn')[2].classList.add('active');
+  renderHoleCards(); renderCommunityCards(); hideResult();
+}
+
+function hideResult() {
+  document.getElementById('resultCard').classList.remove('show',
+    'result-fold','result-check','result-call','result-raise','result-allin');
+  document.getElementById('resultCard').style.display = 'none';
+}
+
+// ===== Poker Engine =====
+function evaluate5(cards) {
+  const sorted = [...cards].sort((a, b) => b.value - a.value);
+  const vals = sorted.map(c => c.value);
+  const suits = sorted.map(c => c.suit);
+  const isFlush = new Set(suits).size === 1;
+
+  // Straight check
+  let isStraight = false;
+  let straightHigh = 0;
+  // Normal straight
+  let normal = true;
+  for (let i = 0; i < 4; i++) {
+    if (vals[i] - vals[i+1] !== 1) { normal = false; break; }
+  }
+  if (normal) { isStraight = true; straightHigh = vals[0]; }
+  // Wheel: A-5-4-3-2
+  if (!isStraight && vals[0]===14 && vals[1]===5 && vals[2]===4 && vals[3]===3 && vals[4]===2) {
+    isStraight = true; straightHigh = 5;
+  }
+
+  // Rank counts
+  const counts = {};
+  for (const v of vals) counts[v] = (counts[v]||0) + 1;
+  const groups = Object.entries(counts).map(([v,c]) => ({v:+v, c})).sort((a,b) => b.c-a.c || b.v-a.v);
+  const pattern = groups.map(g => g.c);
+  const kickers = groups.map(g => g.v);
+
+  let rank, rankVal;
+  if (isFlush && isStraight) {
+    if (straightHigh === 14) { rank = '皇家同花顺'; rankVal = 9; }
+    else { rank = '同花顺'; rankVal = 8; }
+  } else if (pattern[0] === 4) { rank = '四条'; rankVal = 7; }
+  else if (pattern[0] === 3 && pattern[1] === 2) { rank = '葫芦'; rankVal = 6; }
+  else if (isFlush) { rank = '同花'; rankVal = 5; }
+  else if (isStraight) { rank = '顺子'; rankVal = 4; }
+  else if (pattern[0] === 3) { rank = '三条'; rankVal = 3; }
+  else if (pattern[0] === 2 && pattern[1] === 2) { rank = '两对'; rankVal = 2; }
+  else if (pattern[0] === 2) { rank = '一对'; rankVal = 1; }
+  else { rank = '高牌'; rankVal = 0; }
+
+  // Encode score for comparison
+  let score = rankVal * 1000000;
+  for (let i = 0; i < kickers.length; i++) score += kickers[i] * Math.pow(15, 4-i);
+
+  return { rank, rankVal, score, kickers };
+}
+
+function combinations(arr, k) {
+  if (k === 0) return [[]];
+  if (arr.length === 0) return [];
+  const [first, ...rest] = arr;
+  const with1 = combinations(rest, k-1).map(c => [first, ...c]);
+  const without = combinations(rest, k);
+  return [...with1, ...without];
+}
+
+function evaluateBest(cards) {
+  if (cards.length < 5) return { rank: '高牌', rankVal: 0, score: 0, kickers: cards.map(c=>c.value).sort((a,b)=>b-a) };
+  if (cards.length === 5) return evaluate5(cards);
+  const combos = combinations(cards, 5);
+  let best = null;
+  for (const combo of combos) {
+    const ev = evaluate5(combo);
+    if (!best || ev.score > best.score) best = ev;
+  }
+  return best;
+}
+
+function buildDeck(exclude) {
+  const ex = new Set(exclude.map(c => c.id));
+  const deck = [];
+  for (const suit of SUITS) {
+    for (const rank of RANKS) {
+      const id = cardId(rank, suit.name);
+      if (!ex.has(id)) {
+        deck.push({ rank, suit: suit.name, symbol: suit.symbol, color: suit.color, id, value: RANK_VALUES[rank] });
+      }
+    }
+  }
+  return deck;
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+function monteCarlo(holeCards, communityCards, numOpponents, sims) {
+  const known = [...holeCards, ...communityCards];
+  const deck = buildDeck(known);
+  const commNeeded = 5 - communityCards.length;
+  let wins = 0, ties = 0;
+
+  for (let s = 0; s < sims; s++) {
+    shuffle(deck);
+    let idx = 0;
+
+    // Deal remaining community
+    const board = [...communityCards];
+    for (let i = 0; i < commNeeded; i++) board.push(deck[idx++]);
+
+    // Evaluate hero
+    const heroScore = evaluateBest([...holeCards, ...board]).score;
+
+    // Evaluate opponents
+    let heroWins = true, isTie = false;
+    for (let o = 0; o < numOpponents; o++) {
+      const opp = [deck[idx++], deck[idx++]];
+      const oppScore = evaluateBest([...opp, ...board]).score;
+      if (oppScore > heroScore) { heroWins = false; isTie = false; break; }
+      else if (oppScore === heroScore) isTie = true;
+    }
+
+    if (heroWins) wins += isTie ? 0.5 : 1;
+  }
+
+  return wins / sims;
+}
+
+// ===== Decision Engine =====
+function recommend(winProb, gameState) {
+  const posFactor = { early: 0.85, middle: 0.95, late: 1.1, blinds: 0.9 }[gameState.position] || 1;
+  const adjustedWin = winProb * posFactor;
+
+  const pot = parseFloat(document.getElementById('potSize').value) || 0;
+  const bet = parseFloat(document.getElementById('betToCall').value) || 0;
+  const potOdds = (pot > 0 && bet > 0) ? bet / (pot + bet) : 0;
+
+  const posLabel = { early:'早位', middle:'中位', late:'晚位', blinds:'盲注' }[gameState.position] || gameState.position;
+  const allCards = [...gameState.holeCards, ...gameState.communityCards];
+  const hand = allCards.length >= 5 ? evaluateBest(allCards) : { rank: '高牌', rankVal: 0 };
+
+  const reasoning = [];
+  reasoning.push(`牌型：${hand.rank}`);
+  reasoning.push(`胜率：${(adjustedWin*100).toFixed(1)}%`);
+  if (potOdds > 0) reasoning.push(`底池赔率：${(potOdds*100).toFixed(1)}%`);
+  reasoning.push(`位置：${posLabel}`);
+
+  let action, confidence, suggestedRaise = null;
+
+  if (adjustedWin > 0.75) {
+    action = '加注'; confidence = Math.min(adjustedWin, 0.95);
+    suggestedRaise = Math.max(pot * 0.66, bet * 2.5);
+    reasoning.push('强牌，加注榨取价值。');
+  } else if (adjustedWin > 0.55) {
+    if (potOdds > 0 && adjustedWin > potOdds) {
+      action = '跟注'; confidence = adjustedWin;
+      reasoning.push('不错的牌，底池赔率有利。');
+    } else {
+      action = '加注'; confidence = adjustedWin * 0.85;
+      suggestedRaise = Math.max(pot * 0.5, bet * 2);
+      reasoning.push('中等牌力，可以考虑加注。');
+    }
+  } else if (adjustedWin > 0.35) {
+    if (bet === 0) {
+      action = '过牌'; confidence = 0.6;
+      reasoning.push('边缘牌，过牌看更多牌。');
+    } else if (potOdds > 0 && adjustedWin > potOdds) {
+      action = '跟注'; confidence = adjustedWin;
+      reasoning.push('底池赔率支持跟注。');
+    } else {
+      action = '弃牌'; confidence = 1 - adjustedWin;
+      reasoning.push('边缘牌且赔率不好，建议弃牌。');
+    }
+  } else {
+    if (bet === 0) {
+      action = '过牌'; confidence = 0.7;
+      reasoning.push('弱牌，免费看牌。');
+    } else {
+      action = '弃牌'; confidence = 1 - adjustedWin;
+      reasoning.push('弱牌面对下注，果断弃牌。');
+    }
+  }
+
+  return { action, confidence, winProb: adjustedWin, hand: hand.rank, potOdds, reasoning, suggestedRaise };
+}
+
+// ===== Analyze =====
+function analyze() {
+  if (state.holeCards.length < 2) return;
+
+  state.potSize = parseFloat(document.getElementById('potSize').value) || 0;
+  state.betToCall = parseFloat(document.getElementById('betToCall').value) || 0;
+
+  const btn = document.getElementById('analyzeBtn');
+  const loading = document.getElementById('loading');
+  btn.disabled = true;
+  btn.textContent = '分析中...';
+  loading.classList.add('show');
+  hideResult();
+
+  setTimeout(() => {
+    const opponents = Math.max(state.players - 1, 1);
+    const winProb = monteCarlo(state.holeCards, state.communityCards, opponents, 2000);
+    const rec = recommend(winProb, state);
+    showResult(rec);
+
+    btn.disabled = false;
+    btn.textContent = '开始分析';
+    loading.classList.remove('show');
+  }, 50);
+}
+
+function showResult(rec) {
+  const card = document.getElementById('resultCard');
+  const actionClass = { '弃牌':'fold', '过牌':'check', '跟注':'call', '加注':'raise', 'All-In':'allin' }[rec.action] || 'check';
+  card.className = 'result-card show result-' + actionClass;
+  card.style.display = 'block';
+
+  const emoji = { '弃牌':'\uD83D\uDD34', '过牌':'\uD83D\uDFE1', '跟注':'\uD83D\uDFE2', '加注':'\uD83D\uDD35', 'All-In':'\uD83D\uDFE3' };
+  document.getElementById('resultAction').textContent = (emoji[rec.action]||'') + ' ' + rec.action;
+  document.getElementById('resultConfidence').textContent = `置信度：${(rec.confidence*100).toFixed(0)}%`;
+
+  let statsHtml = `
+    <div class="stat-box"><div class="stat-label">胜率</div><div class="stat-value">${(rec.winProb*100).toFixed(1)}%</div></div>
+    <div class="stat-box"><div class="stat-label">牌型</div><div class="stat-value" style="font-size:14px">${rec.hand}</div></div>`;
+  if (rec.potOdds > 0) {
+    statsHtml += `<div class="stat-box"><div class="stat-label">底池赔率</div><div class="stat-value">${(rec.potOdds*100).toFixed(1)}%</div></div>`;
+  }
+  document.getElementById('resultStats').innerHTML = statsHtml;
+
+  const raiseEl = document.getElementById('resultRaise');
+  if (rec.suggestedRaise) {
+    raiseEl.textContent = `建议加注：${rec.suggestedRaise.toFixed(0)}`;
+    raiseEl.style.display = 'block';
+  } else {
+    raiseEl.style.display = 'none';
+  }
+
+  const ul = document.getElementById('resultReasons');
+  ul.innerHTML = rec.reasoning.map(r => `<li>${r}</li>`).join('');
+
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Init
+renderHoleCards();
+renderCommunityCards();
+
+// Register Service Worker for offline support
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+</script>
+</body>
+</html>
