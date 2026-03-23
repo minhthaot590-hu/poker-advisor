@@ -136,19 +136,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .bet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;display:none;align-items:flex-end;justify-content:center}
 .bet-overlay.open{display:flex}
 .bet-popup{background:var(--card-bg);border-top-left-radius:20px;border-top-right-radius:20px;width:100%;max-width:500px;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
-.bet-popup-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.bet-popup-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .bet-popup-header h3{font-size:15px}
-.bet-popup-current{text-align:center;font-size:24px;font-weight:800;color:var(--yellow);padding:8px 0}
-.bet-popup-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
-.bet-popup-grid button{padding:14px 8px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-weight:600;cursor:pointer}
-.bet-popup-grid button:active{background:var(--blue);border-color:var(--blue)}
-.bet-popup-input{display:flex;gap:8px;margin-bottom:10px}
-.bet-popup-input input{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:18px;text-align:center}
-.bet-popup-input button{padding:12px 20px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+/* Scroll wheel */
+.wheel-wrap{position:relative;height:180px;overflow:hidden;margin:8px 0}
+.wheel-mask-top,.wheel-mask-bot{position:absolute;left:0;right:0;height:68px;z-index:2;pointer-events:none}
+.wheel-mask-top{top:0;background:linear-gradient(to bottom,var(--card-bg),transparent)}
+.wheel-mask-bot{bottom:0;background:linear-gradient(to top,var(--card-bg),transparent)}
+.wheel-highlight{position:absolute;top:50%;left:10%;right:10%;height:44px;transform:translateY(-50%);border-top:2px solid var(--blue);border-bottom:2px solid var(--blue);border-radius:4px;z-index:1;pointer-events:none}
+.wheel-scroll{height:100%;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
+.wheel-scroll::-webkit-scrollbar{display:none}
+.wheel-item{height:44px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--text2);scroll-snap-align:center;transition:color .1s}
+.wheel-item.active{color:var(--text);font-size:26px}
+.wheel-pad{height:68px}
 .bet-popup-actions{display:flex;gap:8px}
-.bet-popup-actions button{flex:1;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:600;cursor:pointer}
+.bet-popup-actions button{flex:1;padding:14px;border-radius:10px;border:none;font-size:15px;font-weight:600;cursor:pointer}
 .bpa-clear{background:var(--red);color:#fff}
-.bpa-close{background:var(--border);color:var(--text)}
+.bpa-close{background:var(--blue);color:#fff}
 </style>
 </head>
 <body>
@@ -232,32 +236,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
 </div>
 
-<!-- Bet Popup -->
+<!-- Bet Popup with Scroll Wheel -->
 <div class="bet-overlay" id="betOverlay" onclick="closeBetPopup(event)">
   <div class="bet-popup" onclick="event.stopPropagation()">
     <div class="bet-popup-header">
       <h3 id="betPopupTitle">P1 下注</h3>
       <button class="picker-close" onclick="closeBetPopup()">&times;</button>
     </div>
-    <div class="bet-popup-current" id="betPopupCurrent">当前: 0</div>
-    <div class="bet-popup-grid">
-      <button onclick="setBet(5)">5</button>
-      <button onclick="setBet(10)">10</button>
-      <button onclick="setBet(15)">15</button>
-      <button onclick="setBet(25)">25</button>
-      <button onclick="setBet(50)">50</button>
-      <button onclick="setBet(100)">100</button>
-      <button onclick="setBet(200)">200</button>
-      <button onclick="setBet(500)">500</button>
-      <button onclick="addToBet()">+自定义</button>
-    </div>
-    <div class="bet-popup-input" id="betCustomRow" style="display:none">
-      <input type="number" id="betCustomInput" inputmode="decimal" placeholder="输入金额">
-      <button onclick="confirmCustomBet()">确定</button>
+    <div class="wheel-wrap">
+      <div class="wheel-mask-top"></div>
+      <div class="wheel-mask-bot"></div>
+      <div class="wheel-highlight"></div>
+      <div class="wheel-scroll" id="wheelScroll"></div>
     </div>
     <div class="bet-popup-actions">
       <button class="bpa-clear" onclick="clearSeatBet()">清零</button>
-      <button class="bpa-close" onclick="closeBetPopup()">完成</button>
+      <button class="bpa-close" onclick="confirmWheel()">确定</button>
     </div>
   </div>
 </div>
@@ -433,14 +427,57 @@ function cycleStyle(i){
   autoAnalyze();
 }
 
-// ===== Bet Popup =====
+// ===== Bet Wheel =====
+const BET_VALUES=[0,1,2,3,4,5,6,7,8,9,10,12,15,18,20,25,30,35,40,45,50,60,70,75,80,90,100,120,150,175,200,250,300,350,400,450,500,600,700,800,900,1000,1500,2000,3000,5000,10000];
+const ITEM_H=44;
+let wheelSelected=0;
+
 function openBetPopup(i){
   state.selectedSeat=i;
   const s=state.seats[i];
   document.getElementById('betPopupTitle').textContent=(i===0?'我':'P'+i)+' 下注';
-  document.getElementById('betPopupCurrent').textContent='当前: '+s.currentBet;
-  document.getElementById('betCustomRow').style.display='none';
+
+  // Build wheel items
+  const scroll=document.getElementById('wheelScroll');
+  let html='<div class="wheel-pad"></div>';
+  for(let j=0;j<BET_VALUES.length;j++){
+    html+=`<div class="wheel-item" data-idx="${j}">${BET_VALUES[j]}</div>`;
+  }
+  html+='<div class="wheel-pad"></div>';
+  scroll.innerHTML=html;
+
+  // Scroll to current value
+  let bestIdx=0;
+  for(let j=0;j<BET_VALUES.length;j++){
+    if(BET_VALUES[j]<=s.currentBet) bestIdx=j;
+  }
+  wheelSelected=bestIdx;
   document.getElementById('betOverlay').classList.add('open');
+  setTimeout(()=>{
+    scroll.scrollTop=bestIdx*ITEM_H;
+    updateWheelHighlight();
+  },50);
+
+  // Listen for scroll
+  scroll.onscroll=()=>updateWheelHighlight();
+}
+
+function updateWheelHighlight(){
+  const scroll=document.getElementById('wheelScroll');
+  const idx=Math.round(scroll.scrollTop/ITEM_H);
+  wheelSelected=Math.max(0,Math.min(idx,BET_VALUES.length-1));
+  scroll.querySelectorAll('.wheel-item').forEach((el,j)=>{
+    el.classList.toggle('active',j===wheelSelected);
+  });
+}
+
+function confirmWheel(){
+  if(state.selectedSeat<0)return;
+  state.seats[state.selectedSeat].currentBet=BET_VALUES[wheelSelected]||0;
+  document.getElementById('betOverlay').classList.remove('open');
+  state.selectedSeat=-1;
+  render();
+  autoAnalyze();
 }
 
 function closeBetPopup(e){
@@ -449,35 +486,14 @@ function closeBetPopup(e){
   state.selectedSeat=-1;
 }
 
-function setBet(amount){
-  if(state.selectedSeat<0)return;
-  state.seats[state.selectedSeat].currentBet=amount;
-  document.getElementById('betPopupCurrent').textContent='当前: '+amount;
-  render();
-  autoAnalyze();
-}
-
-function addToBet(){
-  document.getElementById('betCustomRow').style.display='flex';
-  document.getElementById('betCustomInput').value='';
-  setTimeout(()=>document.getElementById('betCustomInput').focus(),100);
-}
-
-function confirmCustomBet(){
-  const v=parseFloat(document.getElementById('betCustomInput').value)||0;
-  if(v>0&&state.selectedSeat>=0){
-    state.seats[state.selectedSeat].currentBet=v;
-    document.getElementById('betPopupCurrent').textContent='当前: '+v;
-    document.getElementById('betCustomRow').style.display='none';
-    render();
-    autoAnalyze();
-  }
-}
-
 function clearSeatBet(){
   if(state.selectedSeat<0)return;
   state.seats[state.selectedSeat].currentBet=0;
-  document.getElementById('betPopupCurrent').textContent='当前: 0';
+  // Scroll wheel to 0
+  const scroll=document.getElementById('wheelScroll');
+  scroll.scrollTop=0;
+  wheelSelected=0;
+  updateWheelHighlight();
   render();
   autoAnalyze();
 }
