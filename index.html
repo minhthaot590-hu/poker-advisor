@@ -46,6 +46,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .seat-avatar{width:40px;height:40px;border-radius:50%;background:var(--card-bg);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;transition:all .15s}
 .seat.selected .seat-avatar{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue)}
 .seat.is-me .seat-avatar{border-color:var(--green);background:#1a3a2a}
+.seat.folded{opacity:.35}
+.seat.folded .seat-avatar{background:#333;border-color:#555}
 .seat-bet{font-size:11px;color:var(--yellow);font-weight:600;margin-top:2px;min-height:14px}
 .seat-role{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
 .role-d{background:#f0c040;color:#000}
@@ -250,7 +252,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <div class="wheel-scroll" id="wheelScroll"></div>
     </div>
     <div class="bet-popup-actions">
-      <button class="bpa-clear" onclick="clearSeatBet()">清零</button>
+      <button class="bpa-clear" onclick="foldSeat()">弃牌</button>
+      <button style="background:var(--border);color:var(--text)" onclick="clearSeatBet()">清零</button>
       <button class="bpa-close" onclick="confirmWheel()">确定</button>
     </div>
   </div>
@@ -291,7 +294,7 @@ const state={
 function initSeats(){
   state.seats=[];
   for(let i=0;i<state.numSeats;i++){
-    state.seats.push({currentBet:0,style:'?'});
+    state.seats.push({currentBet:0,style:'?',folded:false});
   }
 }
 initSeats();
@@ -331,13 +334,12 @@ function renderTable(){
     const x=cx+rx*Math.cos(a);
     const y=cy+ry*Math.sin(a);
 
+    const s=state.seats[i];
+    const isMe=i===0;
     const seat=document.createElement('div');
-    seat.className='seat'+(i===0?' is-me':'')+(i===state.selectedSeat?' selected':'');
+    seat.className='seat'+(isMe?' is-me':'')+(i===state.selectedSeat?' selected':'')+(s.folded?' folded':'');
     seat.style.left=x+'px';
     seat.style.top=y+'px';
-
-    const isMe=i===0;
-    const s=state.seats[i];
 
     // Determine role: D, SB, BB
     const di=state.dealerIndex;
@@ -414,7 +416,13 @@ function selectSeat(i){
       openPicker('hole');
       return;
     }
-    // 手牌已选，弹出下注面板
+  }
+  // If folded, clicking unfolds them
+  if(state.seats[i].folded){
+    state.seats[i].folded=false;
+    render();
+    autoAnalyze();
+    return;
   }
   state.selectedSeat=i;
   openBetPopup(i);
@@ -490,11 +498,21 @@ function closeBetPopup(e){
 function clearSeatBet(){
   if(state.selectedSeat<0)return;
   state.seats[state.selectedSeat].currentBet=0;
-  // Scroll wheel to 0
+  state.seats[state.selectedSeat].folded=false;
   const scroll=document.getElementById('wheelScroll');
   scroll.scrollTop=0;
   wheelSelected=0;
   updateWheelHighlight();
+  render();
+  autoAnalyze();
+}
+
+function foldSeat(){
+  if(state.selectedSeat<0)return;
+  state.seats[state.selectedSeat].folded=true;
+  state.seats[state.selectedSeat].currentBet=0;
+  document.getElementById('betOverlay').classList.remove('open');
+  state.selectedSeat=-1;
   render();
   autoAnalyze();
 }
@@ -635,7 +653,7 @@ function removeCommunity(i){
 let aiDebounce=null;
 function autoAnalyze(){
   if(state.holeCards.length<2)return;
-  const opp=state.numSeats-1;
+  const opp=state.seats.filter((s,i)=>i!==0&&!s.folded).length;
   if(worker){
     worker.postMessage({
       hole:state.holeCards,
@@ -687,7 +705,7 @@ function applyAdvice(equity,handRank){
 
   // Opponent style adjustment
   let styleAdj=1;
-  const activeStyles=state.seats.slice(1).filter(s=>s.currentBet>0).map(s=>s.style);
+  const activeStyles=state.seats.slice(1).filter(s=>s.currentBet>0&&!s.folded).map(s=>s.style);
   if(activeStyles.length>0){
     styleAdj=activeStyles.reduce((s,st)=>s+(STYLE_FACTOR[st]||1),0)/activeStyles.length;
   }
