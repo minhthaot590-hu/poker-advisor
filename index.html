@@ -12,7 +12,7 @@
 <style>
 :root{--bg:#0d1117;--card-bg:#161b22;--border:#30363d;--text:#e6edf3;--text2:#8b949e;--felt:#1a5c2a;--felt2:#144721;--red:#f85149;--green:#3fb950;--blue:#58a6ff;--yellow:#d29922;--purple:#bc8cff}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;-webkit-tap-highlight-color:transparent;user-select:none;display:flex;flex-direction:column;padding:0 0 env(safe-area-inset-bottom)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;-webkit-tap-highlight-color:transparent;user-select:none;display:flex;flex-direction:column;padding:0 0 calc(80px + env(safe-area-inset-bottom))}
 
 /* === Advice Banner === */
 #adviceBanner{padding:8px 14px;margin:0 10px 4px;border-radius:12px;display:none;align-items:center;gap:10px;font-size:14px;cursor:pointer;transition:all .2s}
@@ -74,7 +74,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .street-label{font-size:11px;color:rgba(255,255,255,.6);text-shadow:0 1px 2px rgba(0,0,0,.5)}
 
 /* === Bottom Controls === */
-.bottom-bar{background:var(--card-bg);border-top:1px solid var(--border);padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+.bottom-bar{position:fixed;bottom:0;left:0;right:0;background:var(--card-bg);border-top:1px solid var(--border);padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;z-index:50}
 .bet-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .bet-btn{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;min-width:48px;text-align:center;transition:all .1s}
 .bet-btn:active{transform:scale(.95)}
@@ -228,7 +228,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <span id="seatCount">6</span>
       <button onclick="changeSeats(1)">+</button>
     </div>
-    <button class="btn-street" onclick="nextStreet()">下一街 ▶</button>
+    <button class="btn-street" id="btnStreet" onclick="nextStreet()">翻牌 ▶</button>
     <button class="btn-reset" onclick="clearBets()">清注</button>
   </div>
 </div>
@@ -492,6 +492,10 @@ function renderPot(){
 
 function updateStreetLabel(){
   document.getElementById('streetLabel').textContent=STREET_NAMES[STREETS[state.streetIndex]]||'';
+  const btn=document.getElementById('btnStreet');
+  const nextNames=['翻牌 ▶','转牌 ▶','河牌 ▶','已结束'];
+  btn.textContent=nextNames[state.streetIndex]||'已结束';
+  btn.disabled=state.streetIndex>=3;
 }
 
 // ===== Dealer Long-press =====
