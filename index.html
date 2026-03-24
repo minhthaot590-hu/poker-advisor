@@ -204,7 +204,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <h3>⚙ 设置</h3>
     <div class="settings-row">
       <label>大盲注 (BB)</label>
-      <input type="number" id="bbSizeInput" inputmode="decimal" placeholder="2" value="2">
+      <input type="number" id="bbSizeInput" inputmode="decimal" placeholder="10" value="10">
       <div class="hint">设置大盲注大小，小盲自动为大盲的一半。新局时自动扣盲注。</div>
     </div>
     <div class="settings-row">
@@ -289,7 +289,7 @@ const state={
   numSeats:6,
   myIndex:0, // "我" is seat index 0 (bottom)
   dealerIndex:1, // 庄位 (D button)
-  bbSize:2, // 大盲注大小
+  bbSize:10, // 大盲注大小
   seats:[], // {currentBet, style}
   pot:0,
   streetIndex:0,
@@ -499,6 +499,9 @@ let dealerTimer=null;
 function startDealerTimer(i){
   dealerTimer=setTimeout(()=>{
     state.dealerIndex=i;
+    // Clear all bets and re-post blinds
+    state.seats.forEach(s=>s.currentBet=0);
+    postBlinds();
     render();
     autoAnalyze();
     dealerTimer=null;
@@ -637,8 +640,10 @@ function changeSeats(d){
   const n=Math.max(2,Math.min(10,state.numSeats+d));
   if(n===state.numSeats)return;
   state.numSeats=n;
+  if(state.dealerIndex>=n) state.dealerIndex=0;
   document.getElementById('seatCount').textContent=n;
   initSeats();
+  postBlinds();
   state.selectedSeat=-1;
   render();
   autoAnalyze();
@@ -1040,7 +1045,7 @@ function saveSettings(){
   const key=document.getElementById('apiKeyInput').value.trim();
   if(key) localStorage.setItem('poker_api_key',key);
   else localStorage.removeItem('poker_api_key');
-  const bb=parseFloat(document.getElementById('bbSizeInput').value)||2;
+  const bb=parseFloat(document.getElementById('bbSizeInput').value)||10;
   state.bbSize=bb;
   localStorage.setItem('poker_bb_size',bb);
   document.getElementById('settingsOverlay').classList.remove('open');
@@ -1129,7 +1134,7 @@ ${opponentInfo?'- 对手信息：\n'+opponentInfo:''}
 }
 
 // ===== Init =====
-state.bbSize=parseFloat(localStorage.getItem('poker_bb_size'))||2;
+state.bbSize=parseFloat(localStorage.getItem('poker_bb_size'))||10;
 postBlinds();
 render();
 
